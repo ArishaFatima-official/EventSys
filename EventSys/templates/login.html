@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>EventSys — Student Login</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="auth-logo">📅 <strong>EventSys</strong></div>
+    <h2>Student Login</h2>
+    <p class="auth-sub">Sign in with your SAP ID</p>
+
+    <div class="form-group">
+      <label>SAP ID</label>
+      <input type="text" id="sapid" placeholder="e.g. 70123456"/>
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="Your password"/>
+    </div>
+
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;" onclick="doLogin()">
+      🔐 Login
+    </button>
+
+    <div class="auth-footer">
+      Don't have an account? <a href="/signup">Sign up here</a>
+    </div>
+    <div class="auth-footer" style="margin-top:8px;">
+      <a href="/admin" style="color:var(--muted);font-size:0.78rem;">Admin Login →</a>
+    </div>
+  </div>
+</div>
+<script src="/static/script.js"></script>
+<script>
+  // If already logged in, redirect
+  if (localStorage.getItem('student')) window.location.href = '/student-page';
+
+  async function doLogin() {
+    const sapid    = document.getElementById('sapid').value.trim();
+    const password = document.getElementById('password').value;
+    if (!sapid || !password) { showToast('Fill all fields', 'error'); return; }
+
+    const res = await apiFetch('/student/login', 'POST', { sapid, password });
+    if (res.message === 'Login successful') {
+      localStorage.setItem('student', JSON.stringify(res.student));
+      showToast(`Welcome back, ${res.student.fullname}!`, 'success');
+      setTimeout(() => window.location.href = '/student-page', 1000);
+    } else {
+      showToast(res.message || res.error || 'Login failed', 'error');
+    }
+  }
+  document.addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+</script>
+</body>
+</html>

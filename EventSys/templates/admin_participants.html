@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Admin — Participants</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <h2>🔐 Admin Panel</h2>
+    <p id="adminName"></p>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">
+      <div class="nav-label">Admin</div>
+      <a href="/admin/dashboard" class="nav-link"><span class="icon">📊</span><span>Dashboard</span></a>
+      <a href="/admin/events" class="nav-link"><span class="icon">📋</span><span>Manage Events</span></a>
+      <a href="/admin/participants" class="nav-link active"><span class="icon">👥</span><span>Participants</span></a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Portal</div>
+      <a href="/" class="nav-link"><span class="icon">🏠</span><span>Student Portal</span></a>
+      <a href="#" class="nav-link" onclick="adminLogout()"><span class="icon">🚪</span><span>Logout</span></a>
+    </div>
+  </nav>
+</aside>
+
+<main class="main">
+  <div class="topbar">
+    <h1>👥 Participants</h1>
+    <div class="search-box">
+      <span>🔍</span>
+      <input type="text" id="searchInput" placeholder="Search participants..." oninput="searchTable('searchInput','partTable')"/>
+    </div>
+  </div>
+  <div class="content">
+
+    <!-- EVENT SELECTOR -->
+    <div class="section-card" style="margin-bottom:20px;">
+      <div class="section-header">
+        <h2>Select Event</h2>
+      </div>
+      <div style="padding:16px;">
+        <div class="form-group" style="max-width:400px;margin:0;">
+          <label>Choose an Event to view its participants</label>
+          <select id="eventSelect" onchange="loadParticipants()">
+            <option value="">-- Select Event --</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- PARTICIPANTS TABLE -->
+    <div class="section-card" id="participantsSection" style="display:none;">
+      <div class="section-header">
+        <h2 id="participantsTitle">Participants</h2>
+        <div class="section-actions">
+          <span id="participantCount" class="badge badge-blue" style="padding:6px 12px;font-size:0.85rem;"></span>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table id="partTable">
+          <thead>
+            <tr><th>#</th><th>SAP ID</th><th>Student Name</th><th>Department</th><th>Email</th><th>Status</th><th>Action</th></tr>
+          </thead>
+          <tbody id="partBody">
+            <tr><td colspan="7"><div class="empty-state"><p>Select an event above</p></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script src="/static/script.js"></script>
+<script>
+  const admin = JSON.parse(localStorage.getItem('admin') || 'null');
+  if (!admin) window.location.href = '/admin';
+  document.getElementById('adminName').textContent = admin ? admin.username : '';
+  function adminLogout() { localStorage.removeItem('admin'); window.location.href = '/admin'; }
+
+  // Check if eventid is passed in URL query
+  const params   = new URLSearchParams(window.location.search);
+  const urlEvent = params.get('eventid');
+  const urlTitle = params.get('title');
+
+  async function loadEventOptions() {
+    const events = await apiFetch('/events');
+    const sel    = document.getElementById('eventSelect');
+    if (!Array.isArray(events) || events.length === 0) {
+      sel.innerHTML = '<option value="">No events found</option>';
+      return;
+    }
+    sel.innerHTML = '<option value="">-- Select Event --</option>' +
+      events.map(e => `<option value="${e.eventid}">${e.title} (${e.date})</option>`).join('');
+
+    // Auto-select if URL param present
+    if (urlEvent) {
+      sel.value = urlEvent;
+      loadParticipants();
+    }
+  }
+
+  async function loadParticipants() {
+    const eventid = document.getElementById('eventSelect').value;
+    if (!eventid) {
+      document.getElementById('participantsSection').style.display = 'none';
+      return;
+    }
+
+    const eventName = document.getElementById('eventSelect').selectedOptions[0].text;
+    document.getElementById('participantsTitle').textContent = `👥 Participants — ${eventName}`;
+    document.getElementById('participantsSection').style.display = 'block';
+
+    const data  = await apiFetch(`/registrations/event/${eventid}`);
+    const tbody = document.getElementById('partBody');
+
+    if (!Array.isArray(data) || data.length === 0) {
+      document.getElementById('participantCount').textContent = '0 registered';
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📭</div><p>No students registered for this event yet.</p></div></td></tr>`;
+      return;
+    }
+
+    document.getElementById('participantCount').textContent = `${data.length} registered`;
+
+    tbody.innerHTML = data.map((r, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td><strong>${r.sapid}</strong></td>
+        <td>${r.studentname}</td>
+        <td>${r.department}</td>
+        <td>${r.email}</td>
+        <td><span class="badge badge-green">${r.status}</span></td>
+        <td>
+          <button class="btn btn-danger btn-sm" onclick="removeParticipant('${r.sapid}', ${r.eventid})">🗑️ Remove</button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  function removeParticipant(sapid, eventid) {
+    showConfirm(`Remove ${sapid} from this event?`, async () => {
+      const res = await apiFetch(`/registrations/${sapid}/${eventid}`, 'DELETE');
+      showToast(res.message || 'Removed', 'success');
+      loadParticipants();
+    });
+  }
+
+  loadEventOptions();
+</script>
+</body>
+</html>

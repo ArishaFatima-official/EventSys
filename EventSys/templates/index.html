@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EventSys — Student Portal</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+<!-- TOPBAR -->
+<header class="student-topbar">
+  <div class="student-logo">📅 <strong>EventSys</strong></div>
+  <nav class="student-nav">
+    <a href="/student-page" class="nav-link active">🏠 Home</a>
+    <a href="/events-page" class="nav-link">📋 Events</a>
+  </nav>
+  <div class="student-user-area" id="userArea">
+    <a href="/" class="btn btn-ghost btn-sm">Login</a>
+    <a href="/signup" class="btn btn-primary btn-sm">Sign Up</a>
+  </div>
+</header>
+
+<div class="student-body">
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-badge">🎓 University Event Portal</div>
+    <h1>Discover &amp; Register<br/>for Campus Events</h1>
+    <p>Browse upcoming events, register with your SAP ID, and track your attendance — all in one place.</p>
+    <div class="hero-btns">
+      <a href="/events-page" class="btn btn-primary">📋 Browse Events</a>
+      <a href="/signup" class="btn btn-ghost" id="heroSignupBtn">Create Account</a>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-grid" style="max-width:900px;margin:0 auto 40px;">
+    <div class="stat-card">
+      <div class="stat-icon blue">📋</div>
+      <div class="stat-info"><h3 id="statEvents">—</h3><p>Total Events</p></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon orange">📝</div>
+      <div class="stat-info"><h3 id="statRegs">—</h3><p>Registrations</p></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon green">🎓</div>
+      <div class="stat-info"><h3 id="statStudents">—</h3><p>Students</p></div>
+    </div>
+  </div>
+
+  <!-- UPCOMING EVENTS -->
+  <div style="max-width:900px;margin:0 auto;">
+    <div class="section-card">
+      <div class="section-header">
+        <h2>📋 Upcoming Events</h2>
+        <a href="/events-page" class="btn btn-ghost btn-sm">View All →</a>
+      </div>
+      <div class="table-wrapper">
+        <table id="homeTable">
+          <thead><tr><th>Event</th><th>Date</th><th>Venue</th><th>Seats</th><th></th></tr></thead>
+          <tbody id="homeBody">
+            <tr><td colspan="5"><div class="empty-state"><div class="empty-icon">⏳</div><p>Loading...</p></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ADMIN LINK -->
+<div style="text-align:center;padding:24px;color:var(--muted);font-size:0.8rem;">
+  Admin? <a href="/admin" style="color:var(--accent2);">Go to Admin Panel →</a>
+</div>
+
+<script src="/static/script.js"></script>
+<script>
+  // Check if student is logged in
+  const student = JSON.parse(localStorage.getItem('student') || 'null');
+  if (student) {
+    document.getElementById('userArea').innerHTML = `
+      <span style="color:var(--accent3);font-size:0.85rem;">👋 ${student.fullname}</span>
+      <button class="btn btn-ghost btn-sm" onclick="logout()">Logout</button>
+    `;
+    document.getElementById('heroSignupBtn').textContent = 'My Registrations';
+    document.getElementById('heroSignupBtn').href = '/events-page';
+  }
+
+  function logout() {
+    localStorage.removeItem('student');
+      window.location.href = '/';
+  }
+
+  async function loadHome() {
+    const [events, regs] = await Promise.all([
+      apiFetch('/events'),
+      apiFetch('/registrations/student/__all__').catch(() => [])
+    ]);
+    const evArr = Array.isArray(events) ? events : [];
+    document.getElementById('statEvents').textContent   = evArr.length;
+    document.getElementById('statRegs').textContent     = evArr.reduce((s,e)=>s+(e.registered_count||0),0);
+    document.getElementById('statStudents').textContent = '—';
+
+    const tbody = document.getElementById('homeBody');
+    if (evArr.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">📭</div><p>No events yet.</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = evArr.slice(0,5).map(e => {
+      const seats = e.capacity - (e.registered_count || 0);
+      return `<tr>
+        <td><strong>${e.title}</strong></td>
+        <td>📅 ${e.date}</td>
+        <td>📍 ${e.venue}</td>
+        <td><span class="badge ${seats>0?'badge-green':'badge-red'}">${seats} left</span></td>
+        <td><a href="/events-page" class="btn btn-primary btn-sm">Register</a></td>
+      </tr>`;
+    }).join('');
+  }
+  loadHome();
+</script>
+</body>
+</html>

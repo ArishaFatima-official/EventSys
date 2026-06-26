@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>EventSys — Admin Login</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="auth-logo" style="color:var(--accent);">🔐 <strong>Admin Panel</strong></div>
+    <h2>Admin Login</h2>
+    <p class="auth-sub">Access restricted to administrators only</p>
+
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" id="username" placeholder="Admin username"/>
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="Admin password"/>
+    </div>
+
+    <button class="btn btn-danger" style="width:100%;justify-content:center;padding:12px;" onclick="doAdminLogin()">
+      🔐 Login as Admin
+    </button>
+
+    <div class="auth-footer" style="margin-top:16px;">
+      <a href="/" style="color:var(--muted);font-size:0.8rem;">← Back to Student Portal</a>
+    </div>
+    <div class="auth-footer" style="margin-top:8px;font-size:0.75rem;color:var(--muted);">
+      Default: admin / admin123
+    </div>
+  </div>
+</div>
+<script src="/static/script.js"></script>
+<script>
+  if (localStorage.getItem('admin')) window.location.href = '/admin/dashboard';
+
+  async function doAdminLogin() {
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    if (!username || !password) { showToast('Fill all fields', 'error'); return; }
+
+    const res = await apiFetch('/admin/login', 'POST', { username, password });
+    if (res.message === 'Login successful') {
+      localStorage.setItem('admin', JSON.stringify(res.admin));
+      showToast('Welcome, Admin!', 'success');
+      setTimeout(() => window.location.href = '/admin/dashboard', 800);
+    } else {
+      showToast(res.message || res.error || 'Login failed', 'error');
+    }
+  }
+  document.addEventListener('keydown', e => { if(e.key==='Enter') doAdminLogin(); });
+</script>
+</body>
+</html>

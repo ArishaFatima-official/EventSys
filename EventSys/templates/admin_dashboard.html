@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Admin — Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <h2>🔐 Admin Panel</h2>
+    <p id="adminName">Loading...</p>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">
+      <div class="nav-label">Admin</div>
+      <a href="/admin/dashboard" class="nav-link active"><span class="icon">📊</span><span>Dashboard</span></a>
+      <a href="/admin/events" class="nav-link"><span class="icon">📋</span><span>Manage Events</span></a>
+      <a href="/admin/participants" class="nav-link"><span class="icon">👥</span><span>Participants</span></a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Portal</div>
+      <a href="/" class="nav-link"><span class="icon">🏠</span><span>Student Portal</span></a>
+      <a href="#" class="nav-link" onclick="adminLogout()"><span class="icon">🚪</span><span>Logout</span></a>
+    </div>
+  </nav>
+</aside>
+
+<main class="main">
+  <div class="topbar">
+    <h1>Dashboard</h1>
+    <div style="color:var(--muted);font-size:0.85rem;" id="dateTime"></div>
+  </div>
+
+  <div class="content">
+
+    <!-- STATS -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon blue">📋</div>
+        <div class="stat-info"><h3 id="statEvents">—</h3><p>Total Events</p></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon orange">📝</div>
+        <div class="stat-info"><h3 id="statRegs">—</h3><p>Total Registrations</p></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon green">✅</div>
+        <div class="stat-info"><h3 id="statPresent">—</h3><p>Marked Present</p></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon yellow">❌</div>
+        <div class="stat-info"><h3 id="statAbsent">—</h3><p>Marked Absent</p></div>
+      </div>
+    </div>
+
+    <!-- EVENTS OVERVIEW -->
+    <div class="section-card">
+      <div class="section-header">
+        <h2>📋 Events Overview</h2>
+        <a href="/admin/events" class="btn btn-primary btn-sm">➕ Add Event</a>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr><th>Event</th><th>Date</th><th>Venue</th><th>Capacity</th><th>Registered</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="dashEventsBody">
+            <tr><td colspan="6"><div class="empty-state"><div class="empty-icon">⏳</div><p>Loading...</p></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script src="/static/script.js"></script>
+<script>
+  // Auth guard
+  const admin = JSON.parse(localStorage.getItem('admin') || 'null');
+  if (!admin) window.location.href = '/admin';
+  document.getElementById('adminName').textContent = admin ? admin.username : '';
+
+  function adminLogout() {
+    localStorage.removeItem('admin');
+    window.location.href = '/admin';
+  }
+
+  // Clock
+  setInterval(() => {
+    document.getElementById('dateTime').textContent = new Date().toLocaleString();
+  }, 1000);
+  document.getElementById('dateTime').textContent = new Date().toLocaleString();
+
+  async function loadDashboard() {
+    const events = await apiFetch('/events');
+    const evArr  = Array.isArray(events) ? events : [];
+
+    document.getElementById('statEvents').textContent = evArr.length;
+
+    let totalRegs = 0, totalPresent = 0, totalAbsent = 0;
+    evArr.forEach(e => { totalRegs += (e.registered_count || 0); });
+    document.getElementById('statRegs').textContent = totalRegs;
+
+    // Load attendance counts
+    const attReqs = evArr.map(e => apiFetch(`/attendance/event/${e.eventid}`));
+    const attAll  = await Promise.all(attReqs);
+    attAll.forEach(arr => {
+      if (Array.isArray(arr)) {
+        totalPresent += arr.filter(a => a.attendance_status === 'Present').length;
+        totalAbsent  += arr.filter(a => a.attendance_status === 'Absent').length;
+      }
+    });
+    document.getElementById('statPresent').textContent = totalPresent;
+    document.getElementById('statAbsent').textContent  = totalAbsent;
+
+    const tbody = document.getElementById('dashEventsBody');
+    if (evArr.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📭</div><p>No events yet.</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = evArr.map(e => {
+      const seats = e.capacity - (e.registered_count || 0);
+      return `<tr>
+        <td><strong>${e.title}</strong></td>
+        <td>${e.date}</td>
+        <td>${e.venue}</td>
+        <td>${e.capacity}</td>
+        <td><span class="badge badge-blue">${e.registered_count || 0} / ${e.capacity}</span></td>
+        <td style="display:flex;gap:6px;flex-wrap:wrap;">
+          <a href="/admin/participants?eventid=${e.eventid}&title=${encodeURIComponent(e.title)}" class="btn btn-ghost btn-sm">👥 Participants</a>
+          <a href="/admin/attendance?eventid=${e.eventid}&title=${encodeURIComponent(e.title)}" class="btn btn-success btn-sm">✅ Attendance</a>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  loadDashboard();
+</script>
+</body>
+</html>

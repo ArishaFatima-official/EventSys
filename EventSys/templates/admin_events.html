@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Admin — Manage Events</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <h2>🔐 Admin Panel</h2>
+    <p id="adminName"></p>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">
+      <div class="nav-label">Admin</div>
+      <a href="/admin/dashboard" class="nav-link"><span class="icon">📊</span><span>Dashboard</span></a>
+      <a href="/admin/events" class="nav-link active"><span class="icon">📋</span><span>Manage Events</span></a>
+      <a href="/admin/participants" class="nav-link"><span class="icon">👥</span><span>Participants</span></a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Portal</div>
+      <a href="/" class="nav-link"><span class="icon">🏠</span><span>Student Portal</span></a>
+      <a href="#" class="nav-link" onclick="adminLogout()"><span class="icon">🚪</span><span>Logout</span></a>
+    </div>
+  </nav>
+</aside>
+
+<main class="main">
+  <div class="topbar">
+    <h1>📋 Manage Events</h1>
+    <div class="search-box">
+      <span>🔍</span>
+      <input type="text" id="searchInput" placeholder="Search events..." oninput="searchTable('searchInput','evTable')"/>
+    </div>
+  </div>
+  <div class="content">
+    <div class="section-card">
+      <div class="section-header">
+        <h2>All Events</h2>
+        <div class="section-actions">
+          <button class="btn btn-primary" onclick="openModal('addModal')">➕ Add Event</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteAll()">🗑️ Delete All</button>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table id="evTable">
+          <thead>
+            <tr><th>ID</th><th>Title</th><th>Date</th><th>Venue</th><th>Capacity</th><th>Registered</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="evBody">
+            <tr><td colspan="7"><div class="empty-state"><div class="empty-icon">⏳</div><p>Loading...</p></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ADD MODAL -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <h3>➕ Add New Event</h3>
+    <div class="form-group"><label>Event Title</label><input type="text" id="add_title" placeholder="e.g. Tech Fest 2025"/></div>
+    <div class="form-group"><label>Date</label><input type="date" id="add_date"/></div>
+    <div class="form-group"><label>Venue</label><input type="text" id="add_venue" placeholder="e.g. Main Auditorium"/></div>
+    <div class="form-group"><label>Capacity</label><input type="number" id="add_capacity" placeholder="e.g. 200"/></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('addModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="addEvent()">💾 Save Event</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <h3>✏️ Edit Event</h3>
+    <input type="hidden" id="edit_id"/>
+    <div class="form-group"><label>Event Title</label><input type="text" id="edit_title"/></div>
+    <div class="form-group"><label>Date</label><input type="date" id="edit_date"/></div>
+    <div class="form-group"><label>Venue</label><input type="text" id="edit_venue"/></div>
+    <div class="form-group"><label>Capacity</label><input type="number" id="edit_capacity"/></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('editModal')">Cancel</button>
+      <button class="btn btn-warning" onclick="updateEvent()">🔄 Update</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/script.js"></script>
+<script>
+  const admin = JSON.parse(localStorage.getItem('admin') || 'null');
+  if (!admin) window.location.href = '/admin';
+  document.getElementById('adminName').textContent = admin ? admin.username : '';
+  function adminLogout() { localStorage.removeItem('admin'); window.location.href = '/admin'; }
+
+  async function loadEvents() {
+    const data  = await apiFetch('/events');
+    const tbody = document.getElementById('evBody');
+    if (!Array.isArray(data) || data.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📭</div><p>No events. Add one!</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = data.map(e => `
+      <tr>
+        <td><span class="badge badge-gray">${e.eventid}</span></td>
+        <td><strong>${e.title}</strong></td>
+        <td>${e.date}</td>
+        <td>${e.venue}</td>
+        <td>${e.capacity}</td>
+        <td><span class="badge badge-blue">${e.registered_count || 0}</span></td>
+        <td style="display:flex;gap:5px;flex-wrap:wrap;">
+          <button class="btn btn-warning btn-sm" onclick="openEdit(${e.eventid},'${e.title.replace(/'/g,"\\'")}','${e.date}','${e.venue.replace(/'/g,"\\'")}',${e.capacity})">✏️ Edit</button>
+          <a href="/admin/participants?eventid=${e.eventid}&title=${encodeURIComponent(e.title)}" class="btn btn-ghost btn-sm">👥</a>
+          <a href="/admin/attendance?eventid=${e.eventid}&title=${encodeURIComponent(e.title)}" class="btn btn-success btn-sm">✅</a>
+          <button class="btn btn-danger btn-sm" onclick="deleteEvent(${e.eventid})">🗑️</button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  async function addEvent() {
+    const body = {
+      title:    document.getElementById('add_title').value.trim(),
+      date:     document.getElementById('add_date').value,
+      venue:    document.getElementById('add_venue').value.trim(),
+      capacity: parseInt(document.getElementById('add_capacity').value)
+    };
+    if (!body.title || !body.date || !body.venue || !body.capacity) { showToast('Fill all fields', 'error'); return; }
+    const res = await apiFetch('/events', 'POST', body);
+    if (res.message) {
+      showToast(res.message, 'success');
+      closeModal('addModal');
+      ['add_title','add_date','add_venue','add_capacity'].forEach(id => document.getElementById(id).value='');
+      loadEvents();
+    } else { showToast(res.error || 'Failed', 'error'); }
+  }
+
+  function openEdit(id, title, date, venue, capacity) {
+    document.getElementById('edit_id').value       = id;
+    document.getElementById('edit_title').value    = title;
+    document.getElementById('edit_date').value     = date;
+    document.getElementById('edit_venue').value    = venue;
+    document.getElementById('edit_capacity').value = capacity;
+    openModal('editModal');
+  }
+
+  async function updateEvent() {
+    const id   = document.getElementById('edit_id').value;
+    const body = {
+      title:    document.getElementById('edit_title').value.trim(),
+      date:     document.getElementById('edit_date').value,
+      venue:    document.getElementById('edit_venue').value.trim(),
+      capacity: parseInt(document.getElementById('edit_capacity').value)
+    };
+    const res = await apiFetch(`/events/${id}`, 'PUT', body);
+    if (res.message) { showToast(res.message, 'success'); closeModal('editModal'); loadEvents(); }
+    else showToast(res.error || 'Failed', 'error');
+  }
+
+  function deleteEvent(id) {
+    showConfirm(`Delete event #${id}? All registrations will also be removed.`, async () => {
+      const res = await apiFetch(`/events/${id}`, 'DELETE');
+      showToast(res.message || 'Deleted', 'success');
+      loadEvents();
+    });
+  }
+
+  function deleteAll() {
+    showConfirm('Delete ALL events? This cannot be undone.', async () => {
+      const res = await apiFetch('/events', 'DELETE');
+      showToast(res.message || 'All deleted', 'success');
+      loadEvents();
+    });
+  }
+
+  loadEvents();
+</script>
+</body>
+</html>

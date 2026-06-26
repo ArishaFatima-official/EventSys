@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Admin — Attendance</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <h2>🔐 Admin Panel</h2>
+    <p id="adminName"></p>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">
+      <div class="nav-label">Admin</div>
+      <a href="/admin/dashboard" class="nav-link"><span class="icon">📊</span><span>Dashboard</span></a>
+      <a href="/admin/events" class="nav-link"><span class="icon">📋</span><span>Manage Events</span></a>
+      <a href="/admin/participants" class="nav-link"><span class="icon">👥</span><span>Participants</span></a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Portal</div>
+      <a href="/" class="nav-link"><span class="icon">🏠</span><span>Student Portal</span></a>
+      <a href="#" class="nav-link" onclick="adminLogout()"><span class="icon">🚪</span><span>Logout</span></a>
+    </div>
+  </nav>
+</aside>
+
+<main class="main">
+  <div class="topbar">
+    <h1>✅ Attendance</h1>
+    <div class="search-box">
+      <span>🔍</span>
+      <input type="text" id="searchInput" placeholder="Search by name or SAP..." oninput="searchTable('searchInput','attTable')"/>
+    </div>
+  </div>
+  <div class="content">
+
+    <!-- EVENT SELECTOR -->
+    <div class="section-card" style="margin-bottom:20px;">
+      <div class="section-header"><h2>Select Event</h2></div>
+      <div style="padding:16px;">
+        <div class="form-group" style="max-width:400px;margin:0;">
+          <label>Choose an Event to mark attendance</label>
+          <select id="eventSelect" onchange="loadAttendance()">
+            <option value="">-- Select Event --</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATS ROW -->
+    <div class="stats-grid" id="attStats" style="display:none;margin-bottom:20px;">
+      <div class="stat-card">
+        <div class="stat-icon green">✅</div>
+        <div class="stat-info"><h3 id="countPresent">0</h3><p>Present</p></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon orange">❌</div>
+        <div class="stat-info"><h3 id="countAbsent">0</h3><p>Absent</p></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon yellow">⏳</div>
+        <div class="stat-info"><h3 id="countNotMarked">0</h3><p>Not Marked</p></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon blue">👥</div>
+        <div class="stat-info"><h3 id="countTotal">0</h3><p>Total</p></div>
+      </div>
+    </div>
+
+    <!-- ATTENDANCE TABLE -->
+    <div class="section-card" id="attSection" style="display:none;">
+      <div class="section-header">
+        <h2 id="attTitle">Attendance</h2>
+        <div class="section-actions">
+          <button class="btn btn-success btn-sm" onclick="markAll('Present')">✅ Mark All Present</button>
+          <button class="btn btn-danger btn-sm" onclick="markAll('Absent')">❌ Mark All Absent</button>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table id="attTable">
+          <thead>
+            <tr><th>#</th><th>SAP ID</th><th>Student Name</th><th>Status</th><th>Mark</th></tr>
+          </thead>
+          <tbody id="attBody">
+            <tr><td colspan="5"><div class="empty-state"><p>Select an event above</p></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script src="/static/script.js"></script>
+<script>
+  const admin = JSON.parse(localStorage.getItem('admin') || 'null');
+  if (!admin) window.location.href = '/admin';
+  document.getElementById('adminName').textContent = admin ? admin.username : '';
+  function adminLogout() { localStorage.removeItem('admin'); window.location.href = '/admin'; }
+
+  const params   = new URLSearchParams(window.location.search);
+  const urlEvent = params.get('eventid');
+
+  let currentAttendance = [];
+
+  async function loadEventOptions() {
+    const events = await apiFetch('/events');
+    const sel    = document.getElementById('eventSelect');
+    if (!Array.isArray(events) || events.length === 0) {
+      sel.innerHTML = '<option value="">No events found</option>'; return;
+    }
+    sel.innerHTML = '<option value="">-- Select Event --</option>' +
+      events.map(e => `<option value="${e.eventid}">${e.title} (${e.date})</option>`).join('');
+    if (urlEvent) { sel.value = urlEvent; loadAttendance(); }
+  }
+
+  async function loadAttendance() {
+    const eventid = document.getElementById('eventSelect').value;
+    if (!eventid) {
+      document.getElementById('attSection').style.display  = 'none';
+      document.getElementById('attStats').style.display    = 'none';
+      return;
+    }
+    const eventName = document.getElementById('eventSelect').selectedOptions[0].text;
+    document.getElementById('attTitle').textContent = `✅ Attendance — ${eventName}`;
+    document.getElementById('attSection').style.display = 'block';
+    document.getElementById('attStats').style.display   = 'grid';
+
+    const data = await apiFetch(`/attendance/event/${eventid}`);
+    currentAttendance = Array.isArray(data) ? data : [];
+    renderTable();
+  }
+
+  function renderTable() {
+    const tbody   = document.getElementById('attBody');
+    const present = currentAttendance.filter(a => a.attendance_status === 'Present').length;
+    const absent  = currentAttendance.filter(a => a.attendance_status === 'Absent').length;
+    const notM    = currentAttendance.filter(a => a.attendance_status === 'Not Marked').length;
+    document.getElementById('countPresent').textContent   = present;
+    document.getElementById('countAbsent').textContent    = absent;
+    document.getElementById('countNotMarked').textContent = notM;
+    document.getElementById('countTotal').textContent     = currentAttendance.length;
+
+    if (currentAttendance.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">📭</div>
+        <p>No students registered for this event yet.</p></div></td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = currentAttendance.map((a, i) => {
+      const badgeClass = a.attendance_status === 'Present' ? 'badge-green'
+                       : a.attendance_status === 'Absent'  ? 'badge-red'
+                       : 'badge-yellow';
+      return `<tr>
+        <td>${i + 1}</td>
+        <td><strong>${a.sapid}</strong></td>
+        <td>${a.studentname}</td>
+        <td><span class="badge ${badgeClass}">${a.attendance_status}</span></td>
+        <td style="display:flex;gap:6px;">
+          <button class="btn btn-success btn-sm ${a.attendance_status==='Present'?'':'btn-outline'}"
+            onclick="markOne(${a.attendanceid}, 'Present')">✅ Present</button>
+          <button class="btn btn-danger btn-sm"
+            onclick="markOne(${a.attendanceid}, 'Absent')">❌ Absent</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  async function markOne(attendanceid, status) {
+    const res = await apiFetch(`/attendance/${attendanceid}`, 'PUT', { attendance_status: status });
+    if (res.message) {
+      // Update locally without full reload for speed
+      const rec = currentAttendance.find(a => a.attendanceid === attendanceid);
+      if (rec) rec.attendance_status = status;
+      renderTable();
+      showToast(`Marked ${status}`, status === 'Present' ? 'success' : 'error');
+    } else {
+      showToast(res.error || 'Failed', 'error');
+    }
+  }
+
+  async function markAll(status) {
+    showConfirm(`Mark ALL students as ${status}?`, async () => {
+      for (const a of currentAttendance) {
+        await apiFetch(`/attendance/${a.attendanceid}`, 'PUT', { attendance_status: status });
+        a.attendance_status = status;
+      }
+      renderTable();
+      showToast(`All marked ${status}`, 'success');
+    });
+  }
+
+  loadEventOptions();
+</script>
+</body>
+</html>
